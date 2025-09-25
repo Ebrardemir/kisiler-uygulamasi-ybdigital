@@ -37,7 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 : items.where((pair) {
                     final contact = pair.$2;
                     return contact.name.toLowerCase().contains(q) ||
-                        (contact.surname.toLowerCase().contains(q)) ||
+                        ((contact.surname ?? '').toLowerCase().contains(q)) ||
                         contact.phoneNumber.toLowerCase().contains(q);
                   }).toList();
 
@@ -105,7 +105,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                         title: Text(
-                          "${contact.name} ${contact.surname}".trim(),
+                          "${contact.name} ${(contact.surname ?? '')}".trim(),
                           style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
                         subtitle: Text(
@@ -130,7 +130,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               onPressed: () async {
                                 final nameController = TextEditingController(text: contact.name);
-                                final surnameController = TextEditingController(text: contact.surname);
+                                final surnameController = TextEditingController(text: contact.surname ?? '');
                                 final phoneController = TextEditingController(text: contact.phoneNumber);
 
                                 await showDialog<void>(
@@ -175,11 +175,11 @@ class _HomeScreenState extends State<HomeScreen> {
                                             if (newName.isEmpty || newPhone.isEmpty) {
                                               return;
                                             }
-                                            final updated = Contact(
-                                              name: newName,
-                                              surname: newSurname,
-                                              phoneNumber: newPhone,
-                                            );
+                                             final updated = Contact(
+                                               name: newName,
+                                               surname: newSurname,
+                                               phoneNumber: newPhone,
+                                             );
                                             await contactBox.putAt(origIndex, updated);
                                             if (context.mounted) Navigator.pop(context);
                                           },
