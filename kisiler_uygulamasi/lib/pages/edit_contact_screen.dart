@@ -23,7 +23,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.contact.name);
-    _surnameController = TextEditingController(text: widget.contact.surname ?? '');
+    _surnameController = TextEditingController(text: widget.contact.surname);
     _phoneController = TextEditingController(text: widget.contact.phoneNumber);
   }
 
@@ -41,7 +41,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
     final Box<Contact> box = Hive.box<Contact>('contacts');
     final updated = Contact(
       name: _nameController.text.trim(),
-      surname: _surnameController.text.trim().isEmpty ? null : _surnameController.text.trim(),
+      surname: _surnameController.text.trim(),
       phoneNumber: _phoneController.text.trim(),
     );
     await box.putAt(widget.contactIndex, updated);

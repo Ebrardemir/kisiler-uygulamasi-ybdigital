@@ -12,6 +12,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
   @override
   Widget build(BuildContext context) {
     final Box<Contact> contactBox = Hive.box<Contact>('contacts');
@@ -23,18 +25,59 @@ class _HomeScreenState extends State<HomeScreen> {
         child: ValueListenableBuilder(
           valueListenable: contactBox.listenable(),
           builder: (context, Box<Contact> contacts, _) {
-            if (contacts.values.isEmpty) {
+            // Arama filtresi: index-map oluştur
+            final List<(int, Contact)> items = [
+              for (int i = 0; i < contacts.length; i++)
+                if (contacts.getAt(i) != null) (i, contacts.getAt(i)!)
+            ];
+
+            final String q = _query.trim().toLowerCase();
+            final List<(int, Contact)> filtered = q.isEmpty
+                ? items
+                : items.where((pair) {
+                    final contact = pair.$2;
+                    return contact.name.toLowerCase().contains(q) ||
+                        (contact.surname.toLowerCase().contains(q)) ||
+                        contact.phoneNumber.toLowerCase().contains(q);
+                  }).toList();
+
+            if (filtered.isEmpty) {
               return Center(
                 child: Text(
-                  "Kayıtlı kişi yok",
+                  contacts.values.isEmpty ? "Kayıtlı kişi yok" : "Sonuç bulunamadı",
                   style: Theme.of(context).textTheme.bodyLarge,
                 ),
               );
             } else {
               return ListView.builder(
-                itemCount: contacts.length,
+                itemCount: filtered.length + 1,
                 itemBuilder: (context, index) {
-                  Contact? contact = contacts.getAt(index);
+                  if (index == 0) {
+                    // Arama çubuğu
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
+                      child: TextField(
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          hintText: 'Ara: ad, soyad, telefon',
+                          prefixIcon: const Icon(Icons.search),
+                          suffixIcon: _query.isEmpty
+                              ? null
+                              : IconButton(
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() => _query = '');
+                                  },
+                                  icon: const Icon(Icons.clear),
+                                ),
+                          border: const OutlineInputBorder(),
+                        ),
+                        onChanged: (v) => setState(() => _query = v),
+                      ),
+                    );
+                  }
+
+                  final (origIndex, contact) = filtered[index - 1];
                   return Card(
                     margin: const EdgeInsets.symmetric(
                       horizontal: 10,
@@ -54,7 +97,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           radius: 22,
                           backgroundColor: Colors.deepPurple,
                           child: Text(
-                            contact!.name[0].toUpperCase(),
+                            contact.name.isNotEmpty ? contact.name[0].toUpperCase() : '?',
                             style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
@@ -62,7 +105,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                         title: Text(
-                          "${contact.name} ${contact.surname}",
+                          "${contact.name} ${contact.surname}".trim(),
                           style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
                         subtitle: Text(
@@ -86,9 +129,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                 size: 24,
                               ),
                               onPressed: () async {
-                                if (contact == null) return;
                                 final nameController = TextEditingController(text: contact.name);
-                                final surnameController = TextEditingController(text: contact.surname ?? '');
+                                final surnameController = TextEditingController(text: contact.surname);
                                 final phoneController = TextEditingController(text: contact.phoneNumber);
 
                                 await showDialog<void>(
@@ -135,10 +177,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                             }
                                             final updated = Contact(
                                               name: newName,
-                                              surname: newSurname.isEmpty ? null : newSurname,
+                                              surname: newSurname,
                                               phoneNumber: newPhone,
                                             );
-                                            await contactBox.putAt(index, updated);
+                                            await contactBox.putAt(origIndex, updated);
                                             if (context.mounted) Navigator.pop(context);
                                           },
                                           child: const Text('Kaydet'),
@@ -160,7 +202,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 size: 24,
                               ),
                               onPressed: () {
-                                contactBox.deleteAt(index); 
+                                contactBox.deleteAt(origIndex); 
                               },
                             ),
                           ],
