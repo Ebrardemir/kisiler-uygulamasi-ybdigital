@@ -1,122 +1,264 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class Person {
+  Person({required this.id, required this.name, this.phone = ''});
+  final int id;
+  String name;
+  String phone;
 
-  // This widget is the root of your application.
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'phone': phone,
+  };
+
+  static Person fromJson(Map<String, dynamic> json) {
+    return Person(
+      id: json['id'] as int,
+      name: (json['name'] as String?) ?? '',
+      phone: (json['phone'] as String?) ?? '',
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Kişiler',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
+        useMaterial3: true,
+      ),
+      home: const PeoplePage(),
+    );
+  }
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class PeoplePage extends StatefulWidget {
+  const PeoplePage({super.key});
 
-  void _incrementCounter() {
+  @override
+  State<PeoplePage> createState() => _PeoplePageState();
+}
+
+class _PeoplePageState extends State<PeoplePage> {
+  final TextEditingController _searchController = TextEditingController();
+  final List<Person> _people = <Person>[];
+
+  String _query = '';
+  int _nextId = 1;
+
+  static const String _prefsKey = 'people_v1';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPeople();
+  }
+
+  Future<void> _loadPeople() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonString = prefs.getString(_prefsKey);
+    if (jsonString == null || jsonString.isEmpty) {
+      setState(() {
+        _people.addAll(<Person>[
+          Person(id: 1, name: 'Ahmet Yılmaz', phone: '555-111-2233'),
+          Person(id: 2, name: 'Ayşe Demir', phone: '555-333-4455'),
+          Person(id: 3, name: 'Mehmet Kaya', phone: '555-666-7788'),
+        ]);
+        _nextId = 4;
+      });
+      await _savePeople();
+      return;
+    }
+    try {
+      final List<dynamic> decoded = json.decode(jsonString) as List<dynamic>;
+      final List<Person> loaded = decoded
+          .map((e) => Person.fromJson(e as Map<String, dynamic>))
+          .toList();
+      setState(() {
+        _people
+          ..clear()
+          ..addAll(loaded);
+        _nextId = (_people.map((p) => p.id).fold<int>(0, (max, id) => id > max ? id : max)) + 1;
+      });
+    } catch (_) {
+      // If parsing fails, keep current list
+    }
+  }
+
+  Future<void> _savePeople() async {
+    final prefs = await SharedPreferences.getInstance();
+    final data = _people.map((p) => p.toJson()).toList();
+    await prefs.setString(_prefsKey, json.encode(data));
+  }
+
+  List<Person> get _filteredPeople {
+    if (_query.trim().isEmpty) return _people;
+    final q = _query.toLowerCase();
+    return _people.where((p) => p.name.toLowerCase().contains(q) || p.phone.toLowerCase().contains(q)).toList();
+  }
+
+  void _openPersonDialog({Person? person}) async {
+    final nameController = TextEditingController(text: person?.name ?? '');
+    final phoneController = TextEditingController(text: person?.phone ?? '');
+
+    final result = await showDialog<Person>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(person == null ? 'Kişi Ekle' : 'Kişiyi Düzenle'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(labelText: 'Ad Soyad'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: phoneController,
+                decoration: const InputDecoration(labelText: 'Telefon'),
+                keyboardType: TextInputType.phone,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Vazgeç'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final name = nameController.text.trim();
+                final phone = phoneController.text.trim();
+                if (name.isEmpty) return;
+                if (person == null) {
+                  Navigator.of(context).pop(Person(id: _nextId, name: name, phone: phone));
+                } else {
+                  final updated = Person(id: person.id, name: name, phone: phone);
+                  Navigator.of(context).pop(updated);
+                }
+              },
+              child: Text(person == null ? 'Ekle' : 'Kaydet'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == null) return;
+
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      final existingIndex = _people.indexWhere((p) => p.id == result.id);
+      if (existingIndex == -1) {
+        _people.add(result);
+        _nextId += 1;
+      } else {
+        _people[existingIndex] = result;
+      }
     });
+    await _savePeople();
+  }
+
+  Future<void> _deletePerson(Person person) async {
+    setState(() {
+      _people.removeWhere((p) => p.id == person.id);
+    });
+    await _savePeople();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+        title: const Text('Kişiler'),
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Ara (isim veya telefon)',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _query.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() {
+                            _query = '';
+                          });
+                        },
+                      ),
+                border: const OutlineInputBorder(),
+              ),
+              onChanged: (value) {
+                setState(() {
+                  _query = value;
+                });
+              },
             ),
-          ],
-        ),
+          ),
+          Expanded(
+            child: _filteredPeople.isEmpty
+                ? const Center(child: Text('Kayıt bulunamadı'))
+                : ListView.separated(
+                    itemCount: _filteredPeople.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final person = _filteredPeople[index];
+                      return ListTile(
+                        title: Text(person.name),
+                        subtitle: person.phone.isEmpty ? null : Text(person.phone),
+                        leading: CircleAvatar(
+                          child: Text(person.name.isNotEmpty ? person.name[0] : '?'),
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit),
+                              onPressed: () => _openPersonDialog(person: person),
+                              tooltip: 'Düzenle',
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline),
+                              onPressed: () => _deletePerson(person),
+                              tooltip: 'Sil',
+                            ),
+                          ],
+                        ),
+                        onTap: () => _openPersonDialog(person: person),
+                      );
+                    },
+                  ),
+          ),
+        ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _openPersonDialog(),
+        icon: const Icon(Icons.person_add_alt),
+        label: const Text('Kişi Ekle'),
+      ),
     );
   }
 }
