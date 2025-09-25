@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:kisiler_uygulamasi/models/contact.dart';
 import 'package:kisiler_uygulamasi/pages/add_contact_screen.dart';
+import 'package:kisiler_uygulamasi/pages/edit_contact_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -84,8 +85,68 @@ class _HomeScreenState extends State<HomeScreen> {
                                 color: const Color.fromARGB(255, 185, 75, 249),
                                 size: 24,
                               ),
-                              onPressed: () {
-                                //güncellleme işlemi yapılcak
+                              onPressed: () async {
+                                if (contact == null) return;
+                                final nameController = TextEditingController(text: contact.name);
+                                final surnameController = TextEditingController(text: contact.surname ?? '');
+                                final phoneController = TextEditingController(text: contact.phoneNumber);
+
+                                await showDialog<void>(
+                                  context: context,
+                                  builder: (context) {
+                                    return AlertDialog(
+                                      title: const Text('Kişiyi Düzenle'),
+                                      content: SingleChildScrollView(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            TextField(
+                                              controller: nameController,
+                                              decoration: const InputDecoration(labelText: 'Ad'),
+                                              textInputAction: TextInputAction.next,
+                                            ),
+                                            const SizedBox(height: 8),
+                                            TextField(
+                                              controller: surnameController,
+                                              decoration: const InputDecoration(labelText: 'Soyad (opsiyonel)'),
+                                              textInputAction: TextInputAction.next,
+                                            ),
+                                            const SizedBox(height: 8),
+                                            TextField(
+                                              controller: phoneController,
+                                              decoration: const InputDecoration(labelText: 'Telefon'),
+                                              keyboardType: TextInputType.phone,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context),
+                                          child: const Text('Vazgeç'),
+                                        ),
+                                        FilledButton(
+                                          onPressed: () async {
+                                            final String newName = nameController.text.trim();
+                                            final String newSurname = surnameController.text.trim();
+                                            final String newPhone = phoneController.text.trim();
+                                            if (newName.isEmpty || newPhone.isEmpty) {
+                                              return;
+                                            }
+                                            final updated = Contact(
+                                              name: newName,
+                                              surname: newSurname.isEmpty ? null : newSurname,
+                                              phoneNumber: newPhone,
+                                            );
+                                            await contactBox.putAt(index, updated);
+                                            if (context.mounted) Navigator.pop(context);
+                                          },
+                                          child: const Text('Kaydet'),
+                                        ),
+                                      ],
+                                    );
+                                  },
+                                );
                               },
                             ),
                             const SizedBox(width: 2),
