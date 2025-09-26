@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:kisiler_uygulamasi/models/contact.dart';
 import 'package:kisiler_uygulamasi/pages/add_contact_screen.dart';
+import 'package:kisiler_uygulamasi/pages/contact_search_delegate.dart';
+import 'package:kisiler_uygulamasi/pages/edit_contact_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -16,7 +18,17 @@ class _HomeScreenState extends State<HomeScreen> {
     final Box<Contact> contactBox = Hive.box<Contact>('contacts');
 
     return Scaffold(
-      appBar: AppBar(title: Text("Kişilerim")),
+      appBar: AppBar(title: Text("Kişilerim"), actions: [
+    IconButton(
+      icon: const Icon(Icons.search),
+      onPressed: () {
+        showSearch(
+          context: context,
+          delegate: ContactSearchDelegate(contactBox),
+        );
+      },
+    ),
+  ],),
       body: Padding(
         padding: const EdgeInsets.only(top: 8.0, left: 4.0, right: 4.0),
         child: ValueListenableBuilder(
@@ -75,9 +87,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
-                              padding: EdgeInsets.zero, 
-                              constraints:
-                                  const BoxConstraints(), 
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
 
                               icon: Icon(
                                 Icons.edit,
@@ -85,7 +96,13 @@ class _HomeScreenState extends State<HomeScreen> {
                                 size: 24,
                               ),
                               onPressed: () {
-                                //güncellleme işlemi yapılcak
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        EditContactScreen(index: index),
+                                  ),
+                                );
                               },
                             ),
                             const SizedBox(width: 2),
@@ -99,7 +116,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 size: 24,
                               ),
                               onPressed: () {
-                                contactBox.deleteAt(index); 
+                                contactBox.deleteAt(index);
                               },
                             ),
                           ],
